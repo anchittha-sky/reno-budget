@@ -10,17 +10,6 @@ const CATS = [
 ];
 const CAT_LABEL = {structure:"โครงสร้าง", furniture:"เฟอร์นิเจอร์", consumable:"ของใช้สิ้นเปลือง"};
 const ROOM_PRESETS = ["ห้องนอน","ห้องนอนใหญ่","ห้องน้ำ","ห้องนั่งเล่น","ห้องครัว","ห้องทำงาน","ระเบียง","ทางเดิน / บันได"];
-// ความครอบคลุมของสีโดยประมาณ: 1 แกลลอน ≈ 35 ตร.ม. ต่อ 1 รอบ
-const PAINT_COVER = 35;
-const CALC_INFO = {
-  paint:   {label:"ตามพื้นที่ผนัง (สีทับหน้า 2 รอบ)"},
-  primer:  {label:"ตามพื้นที่ผนัง (รองพื้น 1 รอบ)"},
-  wall:    {label:"= พื้นที่ผนัง"},
-  floor:   {label:"= พื้นที่พื้น"},
-  tile:    {label:"= พื้นที่พื้น + เผื่อเสีย 10%"},
-  adhesive:{label:"ตามพื้นที่พื้น (≈1 ถุง / 4 ตร.ม.)"},
-  grout:   {label:"ตามพื้นที่พื้น (≈1 ถุง / 5 ตร.ม.)"}
-};
 
 // ---------- state ----------
 function load(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
@@ -29,7 +18,7 @@ function uid(){ return Math.random().toString(36).slice(2,10) + Date.now().toStr
 
 let S = load(STORE_KEY, null);
 if(!S || !Array.isArray(S.rooms)){
-  const r = {id:uid(), name:"ห้องนอน 1", w:"", l:"", h:"2.6", open:""};
+  const r = {id:uid(), name:"ห้องนอน 1"};
   S = {rooms:[r], cur:r.id, tab:"structure", items:{}, custom:{}, budget:"", contingency:10, onlySel:false, sumScope:"all"};
 }
 let CATALOG = load(CAT_KEY, {items:[], at:null}).items || [];
@@ -46,51 +35,28 @@ function entry(roomId, itemId, create){
 
 // ---------- maths ----------
 const n = v => { const x = parseFloat(String(v).replace(/,/g,"")); return isFinite(x) ? x : 0; };
-const r1 = v => Math.round(v*10)/10;
-function areas(rm){
-  const w=n(rm.w), l=n(rm.l), h=n(rm.h), o=n(rm.open);
-  const floor = w*l;
-  const wall = Math.max(0, 2*(w+l)*h - o);
-  return {floor:r1(floor), wall:r1(wall), ok: w>0 && l>0};
-}
-function autoQty(calc, rm){
-  const a = areas(rm);
-  switch(calc){
-    case "paint": return a.wall ? Math.ceil(a.wall*2/PAINT_COVER) : 0;
-    case "primer": return a.wall ? Math.ceil(a.wall/PAINT_COVER) : 0;
-    case "wall": return a.wall;
-    case "floor": return a.floor;
-    case "tile": return r1(a.floor*1.1);
-    case "adhesive": return a.floor ? Math.ceil(a.floor/4) : 0;
-    case "grout": return a.floor ? Math.ceil(a.floor/5) : 0;
-  }
-  return 0;
-}
 // คำนวณรายการทั้งหมดของห้อง (ทั้งจากรายการกลางและที่เพิ่มเอง)
 function roomLines(rm){
   const out = [];
   for(const it of CATALOG){
     const e = (S.items[rm.id]||{})[it.id] || {};
-    const canAuto = !!(it.calc && CALC_INFO[it.calc]);
-    const isAuto = canAuto && !!e.on && !e.qtyManual;
-    const offer = canAuto && !e.on && !e.qtyManual;
-    const qty = isAuto ? autoQty(it.calc, rm) : (offer ? 0 : n(e.qty));
+    const qty = n(e.qty);
     const own = e.price !== undefined && e.price !== null && e.price !== "";
     const price = own ? n(e.price) : n(it.price);
     out.push({src:"cat", id:it.id, it, e, category:it.category, group:it.group_name, name:it.name, unit:it.unit,
-      link:it.link, note:it.note, labor:!!it.is_labor, isAuto, offer, suggest: canAuto ? autoQty(it.calc, rm) : 0, qty, price, own,
+      link:it.link, note:it.note, labor:!!it.is_labor, qty, price, own,
       newPrice: own && e.priceBase !== undefined && n(e.priceBase) !== n(it.price) ? n(it.price) : null,
       bought:!!e.bought, total: qty*price});
   }
   for(const c of (S.custom[rm.id]||[])){
     const qty = n(c.qty), price = n(c.price);
     out.push({src:"custom", id:c.id, c, category:c.category, group:c.group||"รายการที่เพิ่มเอง", name:c.name, unit:c.unit||"ชิ้น",
-      link:c.link, labor:!!c.labor, isAuto:false, qty, price, own:false, newPrice:null, bought:!!c.bought, total:qty*price});
+      link:c.link, labor:!!c.labor, qty, price, own:false, newPrice:null, bought:!!c.bought, total:qty*price});
   }
   return out;
 }
 const baht = v => "฿" + Math.round(v).toLocaleString("th-TH");
-const fmtQ = v => (Math.round(v*10)/10).toLocaleString("th-TH");
+const fmtQ = v => (Math.round(v*100)/100).toLocaleString("th-TH",{maximumFractionDigits:2});
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const safeUrl = u => { try{ const x = new URL(u); return /^https?:$/.test(x.protocol) ? x.href : ""; }catch(e){ return ""; } };
 
@@ -142,21 +108,7 @@ function renderTotalbar(){
 
 function renderCategory(cat){
   const rm = room();
-  const a = areas(rm);
   let html = "";
-  if(cat === "structure"){
-    html += `<details class="card dims" ${a.ok?"":"open"}>
-      <summary><span>📐 ขนาดห้อง ${esc(rm.name)}</span><span class="small muted">${a.ok ? `พื้น ${fmtQ(a.floor)} · ผนัง ${fmtQ(a.wall)} ตร.ม.` : "แตะเพื่อใส่ขนาด"}</span></summary>
-      <div class="dimgrid">
-        <div><label>กว้าง (เมตร)</label><input class="num" inputmode="decimal" data-dim="w" value="${esc(rm.w)}" placeholder="0"></div>
-        <div><label>ยาว (เมตร)</label><input class="num" inputmode="decimal" data-dim="l" value="${esc(rm.l)}" placeholder="0"></div>
-        <div><label>สูงฝ้า (เมตร)</label><input class="num" inputmode="decimal" data-dim="h" value="${esc(rm.h)}" placeholder="2.6"></div>
-        <div><label>หักประตู/หน้าต่าง (ตร.ม.)</label><input class="num" inputmode="decimal" data-dim="open" value="${esc(rm.open)}" placeholder="เช่น 3.5"></div>
-      </div>
-      <div class="areas"><div class="area">พื้นที่พื้น<b id="aFloor">${fmtQ(a.floor)} ตร.ม.</b></div><div class="area">พื้นที่ผนัง<b id="aWall">${fmtQ(a.wall)} ตร.ม.</b></div></div>
-      <div class="hint">ประตู 1 บาน ≈ 1.8 ตร.ม. · หน้าต่าง 1 บาน ≈ 1.5 ตร.ม. · แอปจะคำนวณจำนวนสี กระเบื้อง และค่าแรงให้อัตโนมัติ</div>
-    </details>`;
-  }
   const lines = roomLines(rm).filter(l => l.category === cat);
   const shown = S.onlySel ? lines.filter(l => l.qty > 0) : lines;
   html += `<div class="toolbar"><label class="switch"><input type="checkbox" data-act="onlySel" ${S.onlySel?"checked":""}> แสดงเฉพาะที่เลือก</label>
@@ -179,14 +131,8 @@ function renderCategory(cat){
 function itemCard(l){
   const url = safeUrl(l.link);
   const tags = (l.labor?`<span class="tag labor">ค่าแรง</span>`:"")
-    + (l.isAuto?`<span class="tag auto">คำนวณอัตโนมัติ</span>`:"")
     + (l.own?`<span class="tag own">ราคาของฉัน</span>`:"")
     + (l.src==="custom"?`<span class="tag own">เพิ่มเอง</span>`:"");
-  const okDims = areas(room()).ok;
-  const autoHint = l.src==="cat" && l.it.calc && CALC_INFO[l.it.calc]
-    ? (l.offer ? `<button class="btn block" data-act="autoOn" style="margin-top:8px;border-style:dashed;color:var(--ok)">✓ ใช้รายการนี้ · ${okDims?`คำนวณได้ ${fmtQ(l.suggest)} ${esc(l.unit)}`:"คำนวณจากขนาดห้อง"}</button>`
-      : l.isAuto ? `<div class="hint">${esc(CALC_INFO[l.it.calc].label)}${okDims?"":" · ใส่ขนาดห้องด้านบนก่อน"} · <a href="#" data-act="autoOff">ไม่ใช้</a></div>`
-      : `<div class="hint">ใส่จำนวนเอง · <a href="#" data-act="autoOn">กลับไปคำนวณอัตโนมัติ</a></div>`) : "";
   return `<div class="item ${l.qty>0?"sel":""} ${l.bought?"bought":""}" data-src="${l.src}" data-id="${l.id}">
     <div class="row between"><div class="grow"><span class="name">${esc(l.name)}</span>${tags}</div></div>
     ${l.note?`<div class="hint">${esc(l.note)}</div>`:""}
@@ -195,7 +141,6 @@ function itemCard(l){
       <div><label>จำนวน (${esc(l.unit)})</label><div class="qty"><button data-act="dec">−</button><input inputmode="decimal" data-f="qty" value="${l.qty?fmtQ(l.qty).replace(/,/g,""):""}" placeholder="0"><button data-act="inc">+</button></div></div>
       <div class="sub" data-sub>${l.total?baht(l.total):"–"}</div>
     </div>
-    ${autoHint}
     ${l.newPrice!==null?`<div class="newprice"><span>ราคาแนะนำใหม่ ${baht(l.newPrice)}</span><button data-act="useNew">ใช้ราคานี้</button></div>`:""}
     <div class="actions">
       ${url?`<a class="btn shop" href="${esc(url)}" target="_blank" rel="noopener sponsored">🛒 ดูสินค้า</a>`:""}
@@ -309,7 +254,7 @@ function findCustom(id){ return (S.custom[S.cur]||[]).find(c => c.id === id); }
 function setQty(info, v){
   const rm = room();
   if(info.src === "custom"){ const c = findCustom(info.id); if(c) c.qty = v; }
-  else { const e = entry(rm.id, info.id, true); e.qty = v; const it = CATALOG.find(x=>x.id===info.id); if(it && it.calc) e.qtyManual = true; }
+  else { entry(rm.id, info.id, true).qty = v; }
 }
 function setPrice(info, v){
   const rm = room();
@@ -328,11 +273,6 @@ function liveUpdate(info){
 
 document.addEventListener("input", ev => {
   const t = ev.target;
-  if(t.dataset.dim){
-    room()[t.dataset.dim] = t.value; save();
-    const a = areas(room()); $("aFloor").textContent = fmtQ(a.floor)+" ตร.ม."; $("aWall").textContent = fmtQ(a.wall)+" ตร.ม.";
-    return;
-  }
   if(t.dataset.g){ S[t.dataset.g] = t.value; save(); return; }
   const info = cardInfo(t); if(!info) return;
   if(t.dataset.f === "qty"){ setQty(info, t.value); save(); liveUpdate(info); }
@@ -340,7 +280,7 @@ document.addEventListener("input", ev => {
 });
 document.addEventListener("change", ev => {
   const t = ev.target;
-  if(t.dataset.dim || t.dataset.f || t.dataset.g){ softRender(); return; }
+  if(t.dataset.f || t.dataset.g){ softRender(); return; }
   if(t.dataset.act === "onlySel"){ S.onlySel = t.checked; save(); render(); return; }
   if(t.dataset.act === "bought"){
     const info = cardInfo(t); if(!info) return;
@@ -388,11 +328,10 @@ document.addEventListener("click", ev => {
       const name = $("mRoomName").value.trim() || "ห้องใหม่";
       if(b.dataset.id){ const rm = S.rooms.find(r=>r.id===b.dataset.id); if(rm) rm.name = name; }
       else {
-        const rm = {id:uid(), name, w:"", l:"", h:"2.6", open:""};
+        const rm = {id:uid(), name};
         const from = $("mCopy") && $("mCopy").value;
         if(from){
           const src = S.rooms.find(r=>r.id===from);
-          if(src){ rm.w=src.w; rm.l=src.l; rm.h=src.h; rm.open=src.open; }
           S.items[rm.id] = JSON.parse(JSON.stringify(S.items[from]||{}));
           for(const k in S.items[rm.id]) S.items[rm.id][k].bought = false;
           S.custom[rm.id] = (S.custom[from]||[]).map(c => Object.assign({}, c, {id:uid(), bought:false}));
@@ -406,13 +345,9 @@ document.addEventListener("click", ev => {
       S.cur = S.rooms[0].id; save(); closeModal(); render(); break; }
     case "close": closeModal(); break;
     case "inc": case "dec": {
-      const ln = info.src==="cat" && roomLines(room()).find(x => x.src==="cat" && x.id===info.id);
-      if(ln && ln.offer){ if(act==="inc"){ entry(S.cur, info.id, true).on = true; save(); render(); } break; }
       const inp = info.card.querySelector('[data-f="qty"]');
-      const v = Math.max(0, n(inp.value) + (act==="inc"?1:-1));
+      const v = Math.max(0, Math.round((n(inp.value) + (act==="inc"?1:-1))*100)/100);
       setQty(info, String(v)); save(); render(); break; }
-    case "autoOn": { const e = entry(S.cur, info.id, true); e.on = true; delete e.qtyManual; delete e.qty; save(); render(); break; }
-    case "autoOff": { const e = entry(S.cur, info.id, true); delete e.on; delete e.qtyManual; delete e.qty; save(); render(); break; }
     case "useNew": case "resetPrice": { const e = entry(S.cur, info.id, true); delete e.price; delete e.priceBase; save(); render(); break; }
     case "addCustom": customModal(null); break;
     case "editCustom": customModal(findCustom(info.id)); break;
