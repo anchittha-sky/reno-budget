@@ -3,6 +3,7 @@
 const CFG = window.RENO_CONFIG;
 const AUTH_KEY = "reno_admin_auth";
 const CATS = [{id:"structure",label:"🧱 โครงสร้าง"},{id:"furniture",label:"🛋️ เฟอร์นิเจอร์"},{id:"consumable",label:"🧴 ของใช้สิ้นเปลือง"}];
+const CALCS = [["","ไม่คำนวณ (ใส่จำนวนเอง)"],["paint","สีทับหน้า: ผนัง×2 รอบ ÷ 35"],["primer","สีรองพื้น: ผนัง ÷ 35"],["wall","= พื้นที่ผนัง (ตร.ม.)"],["floor","= พื้นที่พื้น (ตร.ม.)"],["tile","= พื้นที่พื้น + 10%"],["adhesive","ปูนกาว: พื้น ÷ 4"],["grout","ยาแนว: พื้น ÷ 5"]];
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?"":s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 let auth = null; try{ auth = JSON.parse(localStorage.getItem(AUTH_KEY)||"null"); }catch(e){}
@@ -81,6 +82,7 @@ function card(it){
       <div class="full"><label>ลิงก์ affiliate</label><input class="txt" data-k="link" value="${esc(it.link||"")}" placeholder="https://"></div>
       <div><label>กลุ่ม</label><input class="txt" data-k="group_name" list="groups" value="${esc(it.group_name)}"></div>
       <div><label>ลำดับ</label><input class="num" data-k="sort" inputmode="numeric" value="${esc(it.sort)}"></div>
+      <div class="full"><label>คำนวณจำนวนอัตโนมัติ</label><select data-k="calc">${CALCS.map(([v,l])=>`<option value="${v}" ${(it.calc||"")===v?"selected":""}>${esc(l)}</option>`).join("")}</select></div>
       <div class="full"><label>หมายเหตุ (แสดงให้เพื่อนเห็น)</label><input class="txt" data-k="note" value="${esc(it.note||"")}"></div>
     </div>
     <div class="actions">
@@ -96,6 +98,7 @@ function readCard(el){
     if(k === "is_labor") o[k] = i.checked;
     else if(k === "price") o[k] = parseFloat(i.value.replace(/,/g,"")) || 0;
     else if(k === "sort") o[k] = parseInt(i.value,10) || 0;
+    else if(k === "calc") o[k] = i.value || null;
     else if(k === "link" || k === "note") o[k] = i.value.trim() || null;
     else o[k] = i.value.trim();
   });
